@@ -51,6 +51,9 @@ button.ghost{background:var(--field);color:var(--fg)}
 .item .note{color:var(--mut);font-size:15px;margin-top:10px}
 .del{background:none;color:var(--mut);padding:0;font-weight:500;font-size:14px;margin-top:10px;border-radius:8px}
 .empty{color:var(--mut);padding:8px 0;text-align:center}
+.prio{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:var(--r);padding:12px 16px;margin-bottom:10px}
+.prio span{flex:1;font-weight:700;word-break:break-word}
+.prio input{width:84px;margin:0;padding:10px 12px;text-align:center}
 .hide{display:none}
 </style>
 </head>
@@ -91,6 +94,10 @@ button.ghost{background:var(--field);color:var(--fg)}
   <textarea id="goals" placeholder="Например: хочу стать веб-разработчиком. Проекты и практика важнее видео. Английский нужен каждый день."></textarea>
   <button id="btnGoals">Сохранить цели</button>
   <p class="err" id="goalsErr"></p>
+
+  <h2>Приоритеты</h2>
+  <p class="sub">ИИ разбирает твои цели на направления. Число это баллы за час активной практики, его можно поправить.</p>
+  <div id="prios"></div>
 </section>
 
 </div>
@@ -100,7 +107,7 @@ button.ghost{background:var(--field);color:var(--fg)}
 const SUPABASE_URL = 'https://sohkreezeatwpfetfvub.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_rttIOP7SETBN9v5n1Sgd0A_YPw8kMtc';
 // Включим на следующем шаге, когда появится функция оценки
-const AI_ENABLED = true;
+const AI_ENABLED = false;
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
@@ -143,14 +150,52 @@ function setUser(u) {
 }
 
 // Цели
+let priorities = [];
 async function loadGoals() {
-  const { data } = await sb.from('profiles').select('goals').eq('id', user.id).maybeSingle();
+  const { data } = await sb.from('profiles').select('goals, priorities').eq('id', user.id).maybeSingle();
   $('goals').value = data ? data.goals : '';
+  priorities = (data && data.priorities) || [];
+  renderPrios();
+}
+function renderPrios() {
+  const box = $('prios');
+  box.textContent = '';
+  if (!priorities.length) {
+    const e = document.createElement('p'); e.className = 'empty';
+    e.textContent = 'Сохрани цели, и ИИ составит приоритеты.';
+    box.appendChild(e);
+  }
+  priorities.forEach((p, i) => {
+    const row = document.createElement('div'); row.className = 'prio';
+    const name = document.createElement('span'); name.textContent = p.name;
+    const inp = document.createElement('input'); inp.type = 'number'; inp.min = 1; inp.max = 10; inp.value = p.weight;
+    inp.onchange = async () => {
+      p.weight = Math.min(10, Math.max(1, Number(inp.value) || 1)); inp.value = p.weight;
+      await sb.from('profiles').update({ priorities }).eq('id', user.id);
+    };
+    row.append(name, inp);
+    box.appendChild(row);
+  });
 }
 $('btnGoals').onclick = async () => {
   say('goalsErr', '');
+  $('btnGoals').disabled = true;
   const { error } = await sb.from('profiles').upsert({ id: user.id, goals: $('goals').value });
-  say('goalsErr', error ? 'Не удалось сохранить: ' + error.message : 'Цели сохранены.');
+  if (error) {
+    say('goalsErr', 'Не удалось сохранить: ' + error.message);
+  } else if (!AI_ENABLED) {
+    say('goalsErr', 'Цели сохранены.');
+  } else {
+    say('goalsErr', 'Цели сохранены. ИИ составляет приоритеты, подожди несколько секунд...');
+    const r = await sb.functions.invoke('super-task', { body: { mode: 'priorities' } });
+    if (r.error || !r.data || !r.data.priorities) {
+      say('goalsErr', 'Цели сохранены, но ИИ не смог составить приоритеты. Нажми ещё раз.');
+    } else {
+      priorities = r.data.priorities; renderPrios();
+      say('goalsErr', 'Цели и приоритеты сохранены.');
+    }
+  }
+  $('btnGoals').disabled = false;
 };
 
 // Записи за последние 7 дней
