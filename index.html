@@ -239,7 +239,7 @@ $('btnAdd').onclick = async () => {
   } else {
     $('desc').value = ''; $('mins').value = '';
     if (AI_ENABLED) {
-      const r = await sb.functions.invoke('score-activity', { body: { id: data.id } });
+      const r = await sb.functions.invoke('super-task', { body: { id: data.id } });
       if (r.error) say('addErr', 'Запись сохранена, но ИИ не смог её оценить.');
     }
     loadWeek();
