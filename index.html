@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DimTracker">
+<title>DimTracker</title>
+<style>
+:root{--fg:#0a0a0a;--mut:#707070;--line:#e8e8e8;--soft:#f5f5f5;--r:20px}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding:max(24px,env(safe-area-inset-top)) 20px 96px}
+h1{font-size:44px;line-height:1.02;margin:32px 0 8px;font-weight:800;letter-spacing:-.03em}
+h2{font-size:24px;margin:48px 0 14px;font-weight:800;letter-spacing:-.02em}
+.sub{color:var(--mut);margin:0 0 28px}
+input,textarea{width:100%;padding:15px 18px;border:1px solid var(--line);border-radius:var(--r);background:var(--soft);font:inherit;color:inherit;margin-bottom:10px}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+textarea{min-height:120px;resize:vertical}
+button{border:0;border-radius:var(--r);padding:15px 22px;font:inherit;font-weight:700;background:var(--fg);color:#fff;cursor:pointer}
+button:disabled{opacity:.5}
+button.ghost{background:var(--soft);color:var(--fg)}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+.row input.min{flex:0 0 120px}
+.err{color:#b00020;min-height:22px;margin:6px 0 0;font-size:15px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.top span{color:var(--mut);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top button{padding:10px 16px}
+.total{font-size:96px;line-height:1;font-weight:800;letter-spacing:-.05em;margin:8px 0 0}
+.item{background:var(--soft);border-radius:var(--r);padding:16px 18px;margin-bottom:10px}
+.item .head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.item .d{font-weight:700;word-break:break-word}
+.item .meta{color:var(--mut);font-size:15px;margin-top:4px}
+.badge{flex:none;background:var(--fg);color:#fff;border-radius:999px;padding:4px 12px;font-weight:700;font-size:15px}
+.badge.none{background:#fff;color:var(--mut);border:1px solid var(--line)}
+.del{background:none;color:var(--mut);padding:4px 0;font-weight:500;font-size:14px;margin-top:8px}
+.empty{color:var(--mut);padding:8px 0}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<section id="auth" class="hide">
+  <h1>DimTracker</h1>
+  <p class="sub">Записывай, что сделал за день. ИИ оценит, насколько это полезно.</p>
+  <input id="email" type="email" placeholder="Почта" autocomplete="email">
+  <input id="pass" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password">
+  <div class="row">
+    <button id="btnIn">Войти</button>
+    <button id="btnUp" class="ghost">Регистрация</button>
+  </div>
+  <p class="err" id="authErr"></p>
+</section>
+
+<section id="app" class="hide">
+  <div class="top"><span id="who"></span><button id="btnOut" class="ghost">Выйти</button></div>
+  <h1>Сегодня</h1>
+  <div class="total" id="total">0</div>
+  <p class="sub" id="totalSub">баллов за день</p>
+
+  <h2>Что ты сделал</h2>
+  <input id="desc" type="text" placeholder="Например: написал авторизацию для проекта" maxlength="500">
+  <div class="row">
+    <input id="mins" class="min" type="number" min="0" max="1440" placeholder="Минут">
+    <button id="btnAdd">Добавить</button>
+  </div>
+  <p class="err" id="addErr"></p>
+
+  <div id="list"></div>
+
+  <h2>Мои цели</h2>
+  <p class="sub">Опиши, к чему ты идёшь и что для тебя полезно. ИИ будет оценивать занятия по этому тексту.</p>
+  <textarea id="goals" placeholder="Например: хочу стать веб-разработчиком. Проекты и практика важнее видео. Английский нужен каждый день."></textarea>
+  <button id="btnGoals">Сохранить цели</button>
+  <p class="err" id="goalsErr"></p>
+</section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://sohkreezeatwpfetfvub.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_rttIOP7SETBN9v5n1Sgd0A_YPw8kMtc';
+// Включим на следующем шаге, когда появится функция оценки
+const AI_ENABLED = false;
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = id => document.getElementById(id);
+let user = null;
+
+function say(id, text) { $(id).textContent = text || ''; }
+
+// Вход / регистрация
+async function signIn() {
+  say('authErr', '');
+  const { error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pass').value });
+  if (error) say('authErr', 'Не удалось войти: ' + error.message);
+}
+async function signUp() {
+  say('authErr', '');
+  const { data, error } = await sb.auth.signUp({ email: $('email').value.trim(), password: $('pass').value });
+  if (error) return say('authErr', 'Не удалось зарегистрироваться: ' + error.message);
+  if (!data.session) say('authErr', 'Проверь почту: нужно подтвердить адрес.');
+}
+$('btnIn').onclick = signIn;
+$('btnUp').onclick = signUp;
+$('btnOut').onclick = () => sb.auth.signOut();
+
+// Состояние входа
+sb.auth.onAuthStateChange((_event, session) => {
+  setTimeout(() => setUser(session ? session.user : null), 0);
+});
+
+function setUser(u) {
+  const changed = (u && u.id) !== (user && user.id);
+  user = u;
+  $('auth').classList.toggle('hide', !!u);
+  $('app').classList.toggle('hide', !u);
+  if (u && changed) {
+    $('who').textContent = u.email;
+    loadGoals();
+    loadToday();
+  }
+}
+
+// Цели
+async function loadGoals() {
+  const { data } = await sb.from('profiles').select('goals').eq('id', user.id).maybeSingle();
+  $('goals').value = data ? data.goals : '';
+}
+$('btnGoals').onclick = async () => {
+  say('goalsErr', '');
+  const { error } = await sb.from('profiles').upsert({ id: user.id, goals: $('goals').value });
+  say('goalsErr', error ? 'Не удалось сохранить: ' + error.message : 'Цели сохранены.');
+};
+
+// Записи за сегодня
+async function loadToday() {
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const { data, error } = await sb.from('activities').select('*')
+    .gte('created_at', start.toISOString()).order('created_at', { ascending: false });
+  if (error) return say('addErr', 'Не удалось загрузить записи: ' + error.message);
+  render(data || []);
+}
+
+function render(items) {
+  const list = $('list');
+  list.textContent = '';
+  let total = 0, pending = 0;
+  if (!items.length) {
+    const e = document.createElement('p');
+    e.className = 'empty';
+    e.textContent = 'Пока пусто. Добавь первое занятие выше.';
+    list.appendChild(e);
+  }
+  for (const it of items) {
+    if (it.score == null) pending++; else total += Number(it.score);
+    const card = document.createElement('div'); card.className = 'item';
+    const head = document.createElement('div'); head.className = 'head';
+    const d = document.createElement('div'); d.className = 'd'; d.textContent = it.description;
+    const b = document.createElement('div');
+    b.className = 'badge' + (it.score == null ? ' none' : '');
+    b.textContent = it.score == null ? 'без оценки' : '+' + it.score;
+    head.append(d, b);
+    card.appendChild(head);
+    const parts = [];
+    if (it.minutes) parts.push(it.minutes + ' мин');
+    if (it.category) parts.push(it.category);
+    if (parts.length) { const m = document.createElement('div'); m.className = 'meta'; m.textContent = parts.join(', '); card.appendChild(m); }
+    if (it.ai_comment) { const c = document.createElement('div'); c.className = 'meta'; c.textContent = it.ai_comment; card.appendChild(c); }
+    const del = document.createElement('button'); del.className = 'del'; del.textContent = 'Удалить';
+    del.onclick = async () => { await sb.from('activities').delete().eq('id', it.id); loadToday(); };
+    card.appendChild(del);
+    list.appendChild(card);
+  }
+  $('total').textContent = Math.round(total * 10) / 10;
+  $('totalSub').textContent = pending ? 'баллов за день, записей без оценки: ' + pending : 'баллов за день';
+}
+
+// Добавить запись
+$('btnAdd').onclick = async () => {
+  say('addErr', '');
+  const description = $('desc').value.trim();
+  if (!description) return say('addErr', 'Напиши, что ты сделал.');
+  const minutes = parseInt($('mins').value, 10);
+  $('btnAdd').disabled = true;
+  const { data, error } = await sb.from('activities')
+    .insert({ description, minutes: Number.isFinite(minutes) ? minutes : null }).select().single();
+  if (error) {
+    say('addErr', 'Не удалось добавить: ' + error.message);
+  } else {
+    $('desc').value = ''; $('mins').value = '';
+    if (AI_ENABLED) {
+      const r = await sb.functions.invoke('score-activity', { body: { id: data.id } });
+      if (r.error) say('addErr', 'Запись сохранена, но ИИ не смог её оценить.');
+    }
+    loadToday();
+  }
+  $('btnAdd').disabled = false;
+};
+</script>
+</body>
+</html>
