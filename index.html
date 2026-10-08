@@ -76,6 +76,10 @@ button.ghost{background:var(--field);color:var(--fg)}
 .stat{background:var(--card);border-radius:var(--r);padding:18px 20px;margin-bottom:10px}
 .stat b{font-size:44px;letter-spacing:-.04em;line-height:1}
 .stat div{color:var(--mut);font-size:15px;margin-top:6px}
+.item.bonus{--c:#f59e0b;background:linear-gradient(135deg,#2a1d08,var(--card))}
+.item.done{opacity:.55}
+.pill.fire{background:#f59e0b;color:#1a1002;border-radius:999px}
+.task-btn{margin-top:12px;padding:10px 20px;font-size:15px}
 .hide{display:none}
 </style>
 </head>
@@ -139,7 +143,8 @@ button.ghost{background:var(--field);color:var(--fg)}
 
   <div id="v-tasks" class="hide">
     <h1>Задания</h1>
-    <p class="sub">Здесь появятся задания на день и бонусные задания с огоньком и баллами.</p>
+    <p class="sub" id="taskSub">Задания на сегодня по твоим целям.</p>
+    <div id="taskList"></div>
   </div>
 
   <div id="v-calendar" class="hide">
@@ -357,6 +362,62 @@ function renderCalendar() {
 $('calPrev').onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCalendar(); };
 $('calNext').onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderCalendar(); };
 
+// ===== Задания =====
+let tasks = [], tasksBusy = false;
+function localDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+async function loadTasks(allowCreate = true) {
+  if (tasksBusy) return;
+  const day = localDate(new Date());
+  const { data, error } = await sb.from('daily_tasks').select('*').eq('day', day).order('is_bonus').order('created_at');
+  if (error) return say('taskSub', 'Не удалось загрузить задания: ' + error.message);
+  if (!data.length && allowCreate && AI_ENABLED) {
+    tasksBusy = true;
+    say('taskSub', 'ИИ составляет задания на сегодня, подожди несколько секунд...');
+    const r = await sb.functions.invoke('super-task', { body: { mode: 'tasks', day } });
+    tasksBusy = false;
+    if (r.error) return say('taskSub', 'ИИ не смог составить задания. Открой раздел ещё раз.');
+    return loadTasks(false);
+  }
+  tasks = data; renderTasks();
+}
+
+function renderTasks() {
+  const list = $('taskList'); list.textContent = '';
+  const done = tasks.filter(t => t.done).length;
+  say('taskSub', tasks.length ? 'Выполнено ' + done + ' из ' + tasks.length : 'Заданий пока нет.');
+  for (const t of tasks) {
+    const card = document.createElement('div');
+    card.className = 'item ' + (t.is_bonus ? 'bonus' : 'green') + (t.done ? ' done' : '');
+    const d = document.createElement('div'); d.className = 'd'; d.textContent = t.title; card.appendChild(d);
+    const pills = document.createElement('div'); pills.className = 'pills';
+    const add = (cls, text) => { const x = document.createElement('span'); x.className = 'pill ' + cls; x.textContent = text; pills.appendChild(x); };
+    if (t.is_bonus) add('fire', '\uD83D\uDD25 Бонус');
+    if (t.minutes) add('', '~' + t.minutes + ' мин');
+    if (t.area) add('cat', t.area);
+    add('score', '+' + t.points);
+    if (t.done) add('', 'Выполнено');
+    card.appendChild(pills);
+    if (!t.done) {
+      const b = document.createElement('button'); b.className = 'task-btn ghost'; b.textContent = 'Выполнено';
+      b.onclick = () => completeTask(t, b);
+      card.appendChild(b);
+    }
+    list.appendChild(card);
+  }
+}
+
+async function completeTask(t, btn) {
+  btn.disabled = true;
+  const { error } = await sb.from('activities').insert({
+    description: t.title, minutes: t.minutes, category: t.area, score: t.points,
+    ai_comment: t.is_bonus ? 'Бонусное задание выполнено.' : 'Задание выполнено.'
+  });
+  if (error) { btn.disabled = false; return say('taskSub', 'Не удалось добавить баллы: ' + error.message); }
+  await sb.from('daily_tasks').update({ done: true }).eq('id', t.id);
+  await loadAll(); await loadTasks(false);
+}
+
 // ===== Боковая панель =====
 function setMenu(open) { $('drawer').classList.toggle('open', open); $('scrim').classList.toggle('hide', !open); }
 function show(view) {
@@ -364,6 +425,7 @@ function show(view) {
   document.querySelectorAll('#drawer [data-view]').forEach(b => b.classList.toggle('cur', b.dataset.view === view));
   setMenu(false);
   if (view === 'calendar') renderCalendar();
+  if (view === 'tasks') loadTasks();
 }
 $('btnMenu').onclick = () => setMenu(true);
 $('scrim').onclick = () => setMenu(false);
