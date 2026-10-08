@@ -107,7 +107,7 @@ button.ghost{background:var(--field);color:var(--fg)}
 const SUPABASE_URL = 'https://sohkreezeatwpfetfvub.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_rttIOP7SETBN9v5n1Sgd0A_YPw8kMtc';
 // Включим на следующем шаге, когда появится функция оценки
-const AI_ENABLED = false;
+const AI_ENABLED = true;
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
@@ -258,6 +258,16 @@ function renderDay() {
     add(it.score == null ? '' : 'score', it.score == null ? 'без оценки' : '+' + it.score);
     card.appendChild(pills);
     if (it.ai_comment) { const c = document.createElement('div'); c.className = 'note'; c.textContent = it.ai_comment; card.appendChild(c); }
+    if (it.score == null && AI_ENABLED) {
+      const re = document.createElement('button'); re.className = 'del'; re.textContent = 'Оценить'; re.style.marginRight = '18px';
+      re.onclick = async () => {
+        re.disabled = true; re.textContent = 'Оцениваю...';
+        const r = await sb.functions.invoke('super-task', { body: { id: it.id } });
+        say('addErr', r.error ? 'ИИ не смог оценить запись. Попробуй ещё раз.' : '');
+        loadWeek();
+      };
+      card.appendChild(re);
+    }
     const del = document.createElement('button'); del.className = 'del'; del.textContent = 'Удалить';
     del.onclick = async () => { await sb.from('activities').delete().eq('id', it.id); loadWeek(); };
     card.appendChild(del);
