@@ -80,6 +80,13 @@ button.ghost{background:var(--field);color:var(--fg)}
 .item.done{opacity:.55}
 .pill.fire{background:#f59e0b;color:#1a1002;border-radius:999px}
 .task-btn{margin-top:12px;padding:10px 20px;font-size:15px}
+.streaks{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:8px 0 4px}
+#streaks2{justify-content:flex-start}
+.streak{display:flex;align-items:center;gap:4px;background:var(--card);border-radius:999px;padding:2px 14px 2px 18px}
+.streak b{font-size:22px;letter-spacing:-.02em}
+.streak svg{width:42px;height:52px;display:block}
+.streak.off{opacity:.3}
+.streakhint{color:var(--mut);font-size:14px;text-align:center}
 .hide{display:none}
 </style>
 </head>
@@ -115,6 +122,7 @@ button.ghost{background:var(--field);color:var(--fg)}
     <div class="day" id="dayName"></div>
     <div class="total" id="total">0</div>
     <p class="totalSub" id="totalSub">баллов за день</p>
+    <div class="streaks" id="streaks"></div>
 
     <h2>Что ты сделал</h2>
     <input id="desc" type="text" placeholder="Например: написал авторизацию для проекта" maxlength="500">
@@ -130,6 +138,10 @@ button.ghost{background:var(--field);color:var(--fg)}
     <h1>Профиль</h1>
     <div class="stat"><b id="best">0</b><div id="bestDate">Лучший день: пока нет данных</div></div>
 
+    <h2>Серии</h2>
+    <p class="sub">Сколько дней подряд ты набираешь не меньше указанных баллов. Пока сегодня не добрал, серия не сгорает до конца дня.</p>
+    <div class="streaks" id="streaks2"></div>
+
     <h2>Мои цели</h2>
     <p class="sub">Опиши, к чему ты идёшь и что для тебя полезно. ИИ будет оценивать занятия по этому тексту.</p>
     <textarea id="goals" placeholder="Например: хочу стать веб-разработчиком. Проекты и практика важнее видео. Английский нужен каждый день."></textarea>
@@ -137,7 +149,7 @@ button.ghost{background:var(--field);color:var(--fg)}
     <p class="err" id="goalsErr"></p>
 
     <h2>Приоритеты</h2>
-    <p class="sub">ИИ разбирает твои цели на направления. Число это баллы за час активной практики, его можно поправить.</p>
+    <p class="sub">ИИ разбирает твои цели на направления. Число это важность направления от 1 до 10, его можно поправить.</p>
     <div id="prios"></div>
   </div>
 
@@ -268,7 +280,7 @@ async function loadAll() {
   const { data, error } = await sb.from('activities').select('*').order('created_at', { ascending: false });
   if (error) return say('addErr', 'Не удалось загрузить записи: ' + error.message);
   all = data || [];
-  renderToday(); renderStats(); renderCalendar();
+  renderToday(); renderStats(); renderStreaks(); renderCalendar();
 }
 
 function tone(s) { return s == null ? '' : s >= 8 ? 'purple' : s >= 3 ? 'green' : 'blue'; }
@@ -339,6 +351,41 @@ function renderStats() {
     : 'Лучший день: пока нет данных';
 }
 
+// ===== Серии =====
+const TIERS = [
+  { t: 50, c: '#facc15', tc: '#1a1400' }, { t: 70, c: '#f97316', tc: '#1a0a00' },
+  { t: 100, c: '#ef4444', tc: '#ffffff' }, { t: 120, c: '#a855f7', tc: '#ffffff' }, { t: 150, c: '#3b82f6', tc: '#ffffff' }
+];
+function flame(color, label, textColor) {
+  return '<svg viewBox="0 0 48 60" aria-hidden="true"><path d="M24 2C26 14 41 21 41 38A17 17 0 0 1 7 38C7 30 12 26 15 21C16 27 19 29 21 29C20 19 22 10 24 2Z" fill="' + color + '"/><text x="24" y="44" text-anchor="middle" font-size="13" font-weight="800" fill="' + textColor + '" font-family="-apple-system,Segoe UI,Roboto,sans-serif">' + label + '</text></svg>';
+}
+function streakFor(totals, T) {
+  const d = startOfDay(new Date());
+  if ((totals[dayKey(d)] || 0) < T) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while ((totals[dayKey(d)] || 0) >= T) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+function renderStreaks() {
+  const totals = {};
+  for (const a of all) { const k = dayKey(new Date(a.created_at)); totals[k] = (totals[k] || 0) + (Number(a.score) || 0); }
+  const mk = (tier, n, off) => {
+    const el = document.createElement('div');
+    el.className = 'streak' + (off ? ' off' : '');
+    el.innerHTML = '<b>' + n + 'x</b>' + flame(tier.c, tier.t + '+', tier.tc);
+    return el;
+  };
+  const a = $('streaks'), b = $('streaks2');
+  a.textContent = ''; b.textContent = '';
+  let any = false;
+  for (const tier of TIERS) {
+    const n = streakFor(totals, tier.t);
+    b.appendChild(mk(tier, n, n === 0));
+    if (n > 0) { a.appendChild(mk(tier, n, false)); any = true; }
+  }
+  if (!any) { const h = document.createElement('p'); h.className = 'streakhint'; h.textContent = 'Набери 50+ баллов за день, чтобы начать серию.'; a.appendChild(h); }
+}
+
 // ===== Календарь =====
 function renderCalendar() {
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
@@ -369,7 +416,7 @@ function localDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).
 async function loadTasks(allowCreate = true) {
   if (tasksBusy) return;
   const day = localDate(new Date());
-  const { data, error } = await sb.from('daily_tasks').select('*').eq('day', day).order('is_bonus').order('created_at');
+  const { data, error } = await sb.from('daily_tasks').select('*').eq('day', day).order('is_bonus', { ascending: false }).order('created_at');
   if (error) return say('taskSub', 'Не удалось загрузить задания: ' + error.message);
   if (!data.length && allowCreate && AI_ENABLED) {
     tasksBusy = true;
