@@ -87,6 +87,18 @@ button.ghost{background:var(--field);color:var(--fg)}
 .streak svg{width:42px;height:52px;display:block}
 .streak.off{opacity:.3}
 .streakhint{color:var(--mut);font-size:14px;text-align:center}
+.counter{display:flex;align-items:center;justify-content:center;gap:14px;margin:4px 0 0}
+.counter .total{font-size:104px;margin:0}
+.flame{width:72px;height:90px;flex:none;transform-origin:50% 100%;filter:drop-shadow(0 0 14px rgba(255,120,0,.55))}
+.flame svg{width:100%;height:100%;display:block}
+.flame.on{animation:flicker 1.6s ease-in-out infinite}
+.flame.off{filter:grayscale(1) brightness(.55);opacity:.55}
+.flame.ignite{animation:ignite .9s cubic-bezier(.2,1.4,.4,1) 1,flicker 1.6s ease-in-out .9s infinite}
+@keyframes flicker{0%,100%{transform:scale(1,1) rotate(0)}25%{transform:scale(1.04,.97) rotate(-1.5deg)}50%{transform:scale(.97,1.05) rotate(1deg)}75%{transform:scale(1.03,.99) rotate(-.5deg)}}
+@keyframes ignite{0%{transform:scale(.1);opacity:0}60%{transform:scale(1.25);opacity:1}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){.flame.on,.flame.ignite{animation:none}}
+.bar{height:8px;border-radius:999px;background:var(--field);overflow:hidden;margin-top:12px}
+.bar i{display:block;height:100%;background:var(--c);border-radius:999px}
 .hide{display:none}
 </style>
 </head>
@@ -120,9 +132,8 @@ button.ghost{background:var(--field);color:var(--fg)}
 
   <div id="v-today">
     <div class="day" id="dayName"></div>
-    <div class="total" id="total">0</div>
+    <div class="counter"><div class="flame off" id="flame"><svg viewBox="0 0 64 80" aria-hidden="true"><defs><linearGradient id="fo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff3b00"/><stop offset=".6" stop-color="#ff8a00"/><stop offset="1" stop-color="#ffc107"/></linearGradient><linearGradient id="fi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb300"/><stop offset="1" stop-color="#fff6c8"/></linearGradient></defs><path d="M32 2C34 16 52 26 52 46C52 64 42 78 32 78C22 78 12 66 12 50C12 40 17 33 22 28C23 35 26 38 29 38C27 26 28 12 32 2Z" fill="url(#fo)"/><path d="M32 78C25 78 20 71 20 63C20 55 26 51 29 45C31 50 33 52 36 54C40 57 44 61 44 66C44 73 39 78 32 78Z" fill="url(#fi)"/></svg></div><div class="total" id="total">0</div></div>
     <p class="totalSub" id="totalSub">баллов за день</p>
-    <div class="streaks" id="streaks"></div>
 
     <h2>Что ты сделал</h2>
     <input id="desc" type="text" placeholder="Например: написал авторизацию для проекта" maxlength="500">
@@ -138,15 +149,23 @@ button.ghost{background:var(--field);color:var(--fg)}
     <h1>Профиль</h1>
     <div class="stat"><b id="best">0</b><div id="bestDate">Лучший день: пока нет данных</div></div>
 
-    <h2>Серии</h2>
-    <p class="sub">Сколько дней подряд ты набираешь не меньше указанных баллов. Пока сегодня не добрал, серия не сгорает до конца дня.</p>
-    <div class="streaks" id="streaks2"></div>
-
     <h2>Мои цели</h2>
     <p class="sub">Опиши, к чему ты идёшь и что для тебя полезно. ИИ будет оценивать занятия по этому тексту.</p>
     <textarea id="goals" placeholder="Например: хочу стать веб-разработчиком. Проекты и практика важнее видео. Английский нужен каждый день."></textarea>
     <button id="btnGoals">Сохранить цели</button>
     <p class="err" id="goalsErr"></p>
+
+    <h2>Расскажи подробнее</h2>
+    <p class="sub">Чем точнее ты опишешь свою жизнь, тем конкретнее и полезнее будут задания. ИИ может задать уточняющие вопросы.</p>
+    <textarea id="dNow" placeholder="Чем ты занимаешься сейчас: учёба, проекты, секции, работа..."></textarea>
+    <textarea id="dDeadlines" placeholder="Что нужно успеть и к какому сроку: сессия, зачёт, релиз проекта, трек..."></textarea>
+    <input id="dHours" type="text" placeholder="Сколько времени в день на это есть (например, 3 часа вечером)">
+    <div id="qa"></div>
+    <div class="row">
+      <button id="btnDetails">Сохранить</button>
+      <button id="btnAsk" class="ghost">Вопросы от ИИ</button>
+    </div>
+    <p class="err" id="detailsErr"></p>
 
     <h2>Приоритеты</h2>
     <p class="sub">ИИ разбирает твои цели на направления. Число это важность направления от 1 до 10, его можно поправить.</p>
@@ -156,6 +175,9 @@ button.ghost{background:var(--field);color:var(--fg)}
   <div id="v-tasks" class="hide">
     <h1>Задания</h1>
     <p class="sub" id="taskSub">Задания на сегодня по твоим целям.</p>
+    <h2>Задания недели</h2>
+    <div id="weekList"></div>
+    <h2>Задания на сегодня</h2>
     <div id="taskList"></div>
   </div>
 
@@ -217,20 +239,56 @@ function setUser(u) {
   $('app').classList.toggle('hide', !u);
   if (u && changed) {
     $('who').textContent = u.email;
-    loadGoals();
+    profileReady = loadGoals();
     loadAll();
     show('today');
   }
 }
 
 // Цели
-let priorities = [];
+let priorities = [], savedGoals = '', profileDetails = {}, profileReady = null;
 async function loadGoals() {
-  const { data } = await sb.from('profiles').select('goals, priorities').eq('id', user.id).maybeSingle();
+  const { data } = await sb.from('profiles').select('goals, priorities, details').eq('id', user.id).maybeSingle();
   $('goals').value = data ? data.goals : '';
+  savedGoals = (data && data.goals || '').trim();
   priorities = (data && data.priorities) || [];
-  renderPrios();
+  profileDetails = (data && data.details) || {};
+  $('dNow').value = profileDetails.now || '';
+  $('dDeadlines').value = profileDetails.deadlines || '';
+  $('dHours').value = profileDetails.hours || '';
+  renderPrios(); renderQa();
 }
+function readDetails() {
+  return { now: $('dNow').value.trim(), deadlines: $('dDeadlines').value.trim(), hours: $('dHours').value.trim(),
+    qa: [...document.querySelectorAll('#qa textarea')].map(t => ({ q: t.dataset.q, a: t.value.trim() })) };
+}
+function renderQa() {
+  const box = $('qa'); box.textContent = '';
+  for (const x of (profileDetails.qa || [])) {
+    const l = document.createElement('p'); l.className = 'sub'; l.style.margin = '14px 0 6px'; l.textContent = x.q;
+    const t = document.createElement('textarea'); t.dataset.q = x.q; t.value = x.a || ''; t.style.minHeight = '70px';
+    box.append(l, t);
+  }
+}
+$('btnDetails').onclick = async () => {
+  say('detailsErr', '');
+  const d = readDetails();
+  const { error } = await sb.from('profiles').upsert({ id: user.id, details: d });
+  if (error) return say('detailsErr', 'Не удалось сохранить: ' + error.message);
+  profileDetails = d;
+  say('detailsErr', 'Сохранено. Задания обновятся, когда ты откроешь раздел «Задания».');
+};
+$('btnAsk').onclick = async () => {
+  say('detailsErr', 'ИИ готовит вопросы, подожди несколько секунд...');
+  const d = readDetails();
+  await sb.from('profiles').upsert({ id: user.id, details: d });
+  profileDetails = d;
+  const r = await sb.functions.invoke('super-task', { body: { mode: 'questions' } });
+  if (r.error || !r.data || !r.data.questions) return say('detailsErr', 'ИИ не смог составить вопросы. Попробуй ещё раз.');
+  profileDetails.qa = [...(d.qa || []).filter(x => x.a), ...r.data.questions.map(q => ({ q, a: '' }))];
+  renderQa();
+  say('detailsErr', 'Ответь на вопросы выше и нажми «Сохранить».');
+};
 function renderPrios() {
   const box = $('prios');
   box.textContent = '';
@@ -255,6 +313,7 @@ $('btnGoals').onclick = async () => {
   say('goalsErr', '');
   $('btnGoals').disabled = true;
   const { error } = await sb.from('profiles').upsert({ id: user.id, goals: $('goals').value });
+  if (!error) savedGoals = $('goals').value.trim();
   if (error) {
     say('goalsErr', 'Не удалось сохранить: ' + error.message);
   } else if (!AI_ENABLED) {
@@ -275,12 +334,15 @@ $('btnGoals').onclick = async () => {
 // ===== Записи =====
 let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let calSel = startOfDay(new Date());
+let firstLoad = true, todayTotal = 0;
+const FLAME_AT = 30;
 
 async function loadAll() {
   const { data, error } = await sb.from('activities').select('*').order('created_at', { ascending: false });
   if (error) return say('addErr', 'Не удалось загрузить записи: ' + error.message);
   all = data || [];
-  renderToday(); renderStats(); renderStreaks(); renderCalendar();
+  renderToday(); renderStats(); renderCalendar();
+  if (firstLoad) { firstLoad = false; playToday(); }
 }
 
 function tone(s) { return s == null ? '' : s >= 8 ? 'purple' : s >= 3 ? 'green' : 'blue'; }
@@ -332,8 +394,26 @@ function renderToday() {
   const t = new Date();
   $('dayName').textContent = 'Сегодня, ' + dayLabel(t).toLowerCase();
   const r = fillList($('list'), dayItems(t), 'Сегодня записей пока нет. Добавь занятие выше.');
+  todayTotal = r.total;
   $('total').textContent = r.total;
-  $('totalSub').textContent = r.pending ? 'баллов за день, без оценки: ' + r.pending : 'баллов за день';
+  const fl = $('flame');
+  fl.classList.toggle('on', r.total >= FLAME_AT);
+  fl.classList.toggle('off', r.total < FLAME_AT);
+  $('totalSub').textContent = 'баллов за день' + (r.pending ? ', без оценки: ' + r.pending : '') +
+    ' · ' + (r.total >= FLAME_AT ? 'огонь горит' : 'до огня ' + Math.ceil(FLAME_AT - r.total));
+}
+
+function playToday() {
+  const fl = $('flame'), el = $('total'), to = Number(todayTotal) || 0;
+  fl.classList.remove('ignite'); void fl.offsetWidth;
+  if (to >= FLAME_AT) fl.classList.add('ignite');
+  const t0 = performance.now();
+  const step = now => {
+    const k = Math.min(1, (now - t0) / 700);
+    el.textContent = k < 1 ? Math.round(to * (1 - Math.pow(1 - k, 3))) : to;
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 // ===== Профиль: лучший день =====
@@ -349,41 +429,6 @@ function renderStats() {
   $('bestDate').textContent = bk
     ? 'Лучший день: ' + dates[bk].toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
     : 'Лучший день: пока нет данных';
-}
-
-// ===== Серии =====
-const TIERS = [
-  { t: 50, c: '#facc15', tc: '#1a1400' }, { t: 70, c: '#f97316', tc: '#1a0a00' },
-  { t: 100, c: '#ef4444', tc: '#ffffff' }, { t: 120, c: '#a855f7', tc: '#ffffff' }, { t: 150, c: '#3b82f6', tc: '#ffffff' }
-];
-function flame(color, label, textColor) {
-  return '<svg viewBox="0 0 48 60" aria-hidden="true"><path d="M24 2C26 14 41 21 41 38A17 17 0 0 1 7 38C7 30 12 26 15 21C16 27 19 29 21 29C20 19 22 10 24 2Z" fill="' + color + '"/><text x="24" y="44" text-anchor="middle" font-size="13" font-weight="800" fill="' + textColor + '" font-family="-apple-system,Segoe UI,Roboto,sans-serif">' + label + '</text></svg>';
-}
-function streakFor(totals, T) {
-  const d = startOfDay(new Date());
-  if ((totals[dayKey(d)] || 0) < T) d.setDate(d.getDate() - 1);
-  let n = 0;
-  while ((totals[dayKey(d)] || 0) >= T) { n++; d.setDate(d.getDate() - 1); }
-  return n;
-}
-function renderStreaks() {
-  const totals = {};
-  for (const a of all) { const k = dayKey(new Date(a.created_at)); totals[k] = (totals[k] || 0) + (Number(a.score) || 0); }
-  const mk = (tier, n, off) => {
-    const el = document.createElement('div');
-    el.className = 'streak' + (off ? ' off' : '');
-    el.innerHTML = '<b>' + n + 'x</b>' + flame(tier.c, tier.t + '+', tier.tc);
-    return el;
-  };
-  const a = $('streaks'), b = $('streaks2');
-  a.textContent = ''; b.textContent = '';
-  let any = false;
-  for (const tier of TIERS) {
-    const n = streakFor(totals, tier.t);
-    b.appendChild(mk(tier, n, n === 0));
-    if (n > 0) { a.appendChild(mk(tier, n, false)); any = true; }
-  }
-  if (!any) { const h = document.createElement('p'); h.className = 'streakhint'; h.textContent = 'Набери 50+ баллов за день, чтобы начать серию.'; a.appendChild(h); }
 }
 
 // ===== Календарь =====
@@ -412,57 +457,106 @@ $('calNext').onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMo
 // ===== Задания =====
 let tasks = [], tasksBusy = false;
 function localDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function mondayOf(d) { const x = startOfDay(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function hashStr(str) { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return String(h >>> 0); }
+function contextHash() {
+  const d = profileDetails || {};
+  return hashStr([savedGoals, d.now || '', d.deadlines || '', d.hours || '', (d.qa || []).map(x => x.q + '|' + (x.a || '')).join(';')].join('#'));
+}
 
-async function loadTasks(allowCreate = true) {
+async function loadTasks() {
   if (tasksBusy) return;
-  const day = localDate(new Date());
-  const { data, error } = await sb.from('daily_tasks').select('*').eq('day', day).order('is_bonus', { ascending: false }).order('created_at');
-  if (error) return say('taskSub', 'Не удалось загрузить задания: ' + error.message);
-  if (!data.length && allowCreate && AI_ENABLED) {
-    tasksBusy = true;
-    say('taskSub', 'ИИ составляет задания на сегодня, подожди несколько секунд...');
-    const r = await sb.functions.invoke('super-task', { body: { mode: 'tasks', day } });
-    tasksBusy = false;
-    if (r.error) return say('taskSub', 'ИИ не смог составить задания. Открой раздел ещё раз.');
-    return loadTasks(false);
+  tasksBusy = true;
+  try {
+    await profileReady;
+    const hash = contextHash();
+    const today = localDate(new Date()), monday = localDate(mondayOf(new Date()));
+    for (const [period, day] of [['day', today], ['week', monday]]) {
+      const { data, error } = await sb.from('daily_tasks').select('id, done, goals_hash').eq('period', period).eq('day', day);
+      if (error) return say('taskSub', 'Не удалось загрузить задания: ' + error.message);
+      const stale = data.some(t => !t.done && t.goals_hash !== hash);
+      if ((!data.length || stale) && AI_ENABLED) {
+        say('taskSub', 'ИИ составляет задания под твои цели, подожди несколько секунд...');
+        const r = await sb.functions.invoke('super-task', { body: { mode: 'tasks', day, period, hash, force: stale } });
+        if (r.error) say('taskSub', 'ИИ не смог составить часть заданий. Открой раздел ещё раз.');
+      }
+    }
+    const { data, error } = await sb.from('daily_tasks').select('*').in('day', [today, monday]).order('created_at');
+    if (error) return say('taskSub', 'Не удалось загрузить задания: ' + error.message);
+    tasks = data; renderTasks();
+  } finally { tasksBusy = false; }
+}
+
+function progress(t) {
+  const start = new Date(t.day + 'T00:00:00'), end = new Date(start);
+  end.setDate(end.getDate() + (t.period === 'week' ? 7 : 1));
+  const items = all.filter(a => a.category !== 'Бонус' && new Date(a.created_at) >= start && new Date(a.created_at) < end);
+  const sc = a => Number(a.score) || 0;
+  if (t.metric === 'points') return items.reduce((n, a) => n + sc(a), 0);
+  if (t.metric === 'area_points') return items.filter(a => a.category === t.area).reduce((n, a) => n + sc(a), 0);
+  if (t.metric === 'entries') return items.length;
+  if (t.metric === 'days_over') {
+    const m = {};
+    items.forEach(a => { const k = dayKey(new Date(a.created_at)); m[k] = (m[k] || 0) + sc(a); });
+    return Object.values(m).filter(v => v >= Number(t.threshold)).length;
   }
-  tasks = data; renderTasks();
+  return 0;
+}
+
+function taskCard(t) {
+  const card = document.createElement('div');
+  card.className = 'item ' + (t.metric ? 'purple' : t.is_bonus ? 'bonus' : 'green') + (t.done ? ' done' : '');
+  const d = document.createElement('div'); d.className = 'd'; d.textContent = t.title; card.appendChild(d);
+  const pills = document.createElement('div'); pills.className = 'pills';
+  const add = (cls, text) => { const x = document.createElement('span'); x.className = 'pill ' + cls; x.textContent = text; pills.appendChild(x); };
+  if (t.is_bonus) add('fire', '\uD83D\uDD25 Бонус');
+  if (t.metric) add('cat', t.period === 'week' ? 'Цель недели' : 'Цель дня');
+  if (t.minutes) add('', '~' + t.minutes + ' мин');
+  if (t.area && !t.metric) add('cat', t.area);
+  add('score', '+' + t.points);
+  if (t.done) add('', 'Выполнено');
+  card.appendChild(pills);
+  let ready = !t.metric;
+  if (t.metric) {
+    const target = Number(t.target), p = Math.min(progress(t), target);
+    ready = p >= target;
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const f = document.createElement('i'); f.style.width = (target ? Math.round(p / target * 100) : 0) + '%';
+    bar.appendChild(f); card.appendChild(bar);
+    const n = document.createElement('div'); n.className = 'note'; n.textContent = 'Прогресс: ' + Math.round(p) + ' из ' + target;
+    card.appendChild(n);
+  }
+  if (!t.done && ready) {
+    const b = document.createElement('button'); b.className = 'task-btn ghost'; b.textContent = t.metric ? 'Забрать бонус' : 'Выполнено';
+    b.onclick = () => completeTask(t, b);
+    card.appendChild(b);
+  }
+  return card;
 }
 
 function renderTasks() {
-  const list = $('taskList'); list.textContent = '';
-  const done = tasks.filter(t => t.done).length;
-  say('taskSub', tasks.length ? 'Выполнено ' + done + ' из ' + tasks.length : 'Заданий пока нет.');
-  for (const t of tasks) {
-    const card = document.createElement('div');
-    card.className = 'item ' + (t.is_bonus ? 'bonus' : 'green') + (t.done ? ' done' : '');
-    const d = document.createElement('div'); d.className = 'd'; d.textContent = t.title; card.appendChild(d);
-    const pills = document.createElement('div'); pills.className = 'pills';
-    const add = (cls, text) => { const x = document.createElement('span'); x.className = 'pill ' + cls; x.textContent = text; pills.appendChild(x); };
-    if (t.is_bonus) add('fire', '\uD83D\uDD25 Бонус');
-    if (t.minutes) add('', '~' + t.minutes + ' мин');
-    if (t.area) add('cat', t.area);
-    add('score', '+' + t.points);
-    if (t.done) add('', 'Выполнено');
-    card.appendChild(pills);
-    if (!t.done) {
-      const b = document.createElement('button'); b.className = 'task-btn ghost'; b.textContent = 'Выполнено';
-      b.onclick = () => completeTask(t, b);
-      card.appendChild(b);
-    }
-    list.appendChild(card);
-  }
+  const today = localDate(new Date()), monday = localDate(mondayOf(new Date()));
+  const rank = t => t.is_bonus ? 0 : t.metric ? 1 : 2;
+  const fill = (el, period, day) => {
+    el.textContent = '';
+    const list = tasks.filter(t => t.period === period && t.day === day).sort((a, b) => rank(a) - rank(b));
+    list.forEach(t => el.appendChild(taskCard(t)));
+    return list;
+  };
+  const w = fill($('weekList'), 'week', monday), d = fill($('taskList'), 'day', today);
+  const n = l => l.filter(t => t.done).length;
+  say('taskSub', 'Сегодня выполнено ' + n(d) + ' из ' + d.length + ', за неделю ' + n(w) + ' из ' + w.length);
 }
 
 async function completeTask(t, btn) {
   btn.disabled = true;
-  const { error } = await sb.from('activities').insert({
-    description: t.title, minutes: t.minutes, category: t.area, score: t.points,
-    ai_comment: t.is_bonus ? 'Бонусное задание выполнено.' : 'Задание выполнено.'
-  });
+  const row = t.metric
+    ? { description: 'Бонус: ' + t.title, category: 'Бонус', score: t.points, ai_comment: 'Награда за выполнение условия.' }
+    : { description: t.title, minutes: t.minutes, category: t.area, score: t.points, ai_comment: t.is_bonus ? 'Бонусное задание выполнено.' : 'Задание выполнено.' };
+  const { error } = await sb.from('activities').insert(row);
   if (error) { btn.disabled = false; return say('taskSub', 'Не удалось добавить баллы: ' + error.message); }
   await sb.from('daily_tasks').update({ done: true }).eq('id', t.id);
-  await loadAll(); await loadTasks(false);
+  await loadAll(); await loadTasks();
 }
 
 // ===== Боковая панель =====
@@ -471,6 +565,7 @@ function show(view) {
   for (const v of ['today', 'profile', 'tasks', 'calendar']) $('v-' + v).classList.toggle('hide', v !== view);
   document.querySelectorAll('#drawer [data-view]').forEach(b => b.classList.toggle('cur', b.dataset.view === view));
   setMenu(false);
+  if (view === 'today') playToday();
   if (view === 'calendar') renderCalendar();
   if (view === 'tasks') loadTasks();
 }
