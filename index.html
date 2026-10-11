@@ -112,31 +112,38 @@ button.ghost{background:var(--field);color:var(--fg)}
 .pill.proc::before{content:'';display:inline-block;width:11px;height:11px;margin-right:7px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:var(--green);animation:spin .8s linear infinite;vertical-align:-1px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.flame.on,.flame.ignite,.flame.on *,.view-in,.tab-ind.stretch,.item.busy::after{animation:none!important}}
-.flame{width:98px;height:90px;flex:none;transform-origin:50% 100%;filter:drop-shadow(0 0 10px rgba(255,110,0,.45))}
+.flame{width:104px;height:104px;flex:none;transform-origin:50% 100%;filter:drop-shadow(0 0 12px rgba(255,120,20,.45))}
 .flame svg{width:100%;height:100%;display:block;overflow:visible}
-.flame.off{filter:grayscale(1) brightness(.55);opacity:.55}
-.flame .fl-all{filter:url(#soft)}
-.flame.on .fl-all{filter:url(#turb)}
-.fl-a,.fl-b,.fl-c,.fl-d,.fl-l,.fl-r,.fl-s1,.fl-s2,.fl-s3{transform-box:fill-box;transform-origin:50% 100%}
-.fl-s1,.fl-s2,.fl-s3{opacity:0}
-.flame.on{animation:glow 1.8s ease-in-out infinite}
-.flame.ignite{animation:ignite 1.3s cubic-bezier(.2,.9,.3,1.05) 1,glow 1.8s ease-in-out 1.3s infinite}
-.flame.on .fl-a{animation:breathe 1.6s ease-in-out infinite}
-.flame.on .fl-b{animation:flick 1.1s ease-in-out infinite}
-.flame.on .fl-c{animation:flick .8s ease-in-out -.3s infinite}
-.flame.on .fl-d{animation:flick .6s ease-in-out infinite reverse}
-.flame.on .fl-l{animation:swayL 2.1s ease-in-out infinite}
-.flame.on .fl-r{animation:swayR 1.8s ease-in-out infinite}
-.flame.on .fl-s1{animation:rise 2.4s ease-out infinite}
-.flame.on .fl-s2{animation:rise 2.8s ease-out .9s infinite}
-.flame.on .fl-s3{animation:rise 2.2s ease-out 1.6s infinite}
-@keyframes glow{0%,100%{filter:drop-shadow(0 0 10px rgba(255,110,0,.5))}50%{filter:drop-shadow(0 0 26px rgba(255,150,20,.9))}}
-@keyframes ignite{0%{transform:scale(.2,.08);opacity:0;filter:drop-shadow(0 0 0 rgba(255,100,0,0)) brightness(1)}18%{transform:scale(.28,.2);opacity:.9;filter:drop-shadow(0 0 6px rgba(255,70,0,.7)) brightness(.9)}52%{transform:scale(1.1,1.4);opacity:1;filter:drop-shadow(0 0 36px rgba(255,170,40,1)) brightness(1.7)}78%{transform:scale(.97,.95);filter:drop-shadow(0 0 22px rgba(255,140,20,.85)) brightness(1.15)}100%{transform:scale(1);opacity:1;filter:drop-shadow(0 0 12px rgba(255,110,0,.5)) brightness(1)}}
-@keyframes swayL{0%,100%{transform:rotate(-3deg) scaleY(1)}50%{transform:rotate(3.5deg) scaleY(1.08)}}
-@keyframes swayR{0%,100%{transform:rotate(3deg) scaleY(1.05)}50%{transform:rotate(-3.5deg) scaleY(.95)}}
-@keyframes breathe{0%,100%{transform:scale(1,1) skewX(0)}30%{transform:scale(.985,1.04) skewX(-1.4deg)}60%{transform:scale(1.02,.97) skewX(1.2deg)}}
-@keyframes flick{0%,100%{transform:scale(1,1)}25%{transform:scale(.93,1.09)}50%{transform:scale(1.05,.93)}75%{transform:scale(.96,1.06)}}
-@keyframes rise{0%{transform:translateY(0) scale(1);opacity:0}15%{opacity:1}100%{transform:translateY(-40px) scale(.3);opacity:0}}
+.flame.off{filter:grayscale(1) brightness(.55);opacity:.5}
+.fl-halo,.fl-orbit,.fl-sp{transform-box:fill-box;transform-origin:50% 50%}
+.fl-p,.fl-m,.fl-c,.fl-b{transform-box:fill-box;transform-origin:50% 100%}
+.fl-sp{opacity:0}
+.flame.on .fl-mw{filter:url(#turb)}
+.flame.on{animation:glow 3s ease-in-out infinite}
+.flame.ignite{animation:ignite 1.4s cubic-bezier(.25,.8,.3,1) 1,glow 3s ease-in-out 1.4s infinite}
+.flame.on .fl-halo{animation:haloPulse 3.4s ease-in-out infinite}
+.flame.on .fl-orbit{animation:orbit 9s ease-in-out infinite}
+.flame.on .fl-p{animation:petal 3s ease-in-out infinite}
+.flame.on .fl-p2{animation-duration:2.5s;animation-delay:-.8s}
+.flame.on .fl-p3{animation-duration:3.4s;animation-delay:-1.5s}
+.flame.on .fl-p4{animation-duration:2.8s;animation-delay:-2.1s}
+.flame.on .fl-m{animation:flameMain 2.2s ease-in-out infinite}
+.flame.on .fl-c{animation:coreFlick 1.5s ease-in-out infinite}
+.flame.on .fl-b{animation:bloom 2.4s ease-in-out infinite}
+.flame.on .fl-sp{animation:spark var(--d,3s) ease-out var(--w,0s) infinite}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 12px rgba(255,120,20,.45))}50%{filter:drop-shadow(0 0 26px rgba(255,160,40,.8))}}
+@keyframes ignite{0%{transform:scale(.3,.15);opacity:0;filter:drop-shadow(0 0 0 rgba(255,120,0,0)) brightness(.8)}30%{transform:scale(.55,.5);opacity:1;filter:drop-shadow(0 0 8px rgba(255,100,0,.6)) brightness(.95)}65%{transform:scale(1.05,1.12);filter:drop-shadow(0 0 28px rgba(255,170,50,.9)) brightness(1.2)}100%{transform:scale(1);opacity:1;filter:drop-shadow(0 0 14px rgba(255,120,10,.55)) brightness(1)}}
+@keyframes haloPulse{0%,100%{opacity:.8;transform:scale(1)}50%{opacity:1;transform:scale(1.03)}}
+@keyframes orbit{0%,100%{transform:rotate(-9deg)}50%{transform:rotate(9deg)}}
+@keyframes petal{0%,100%{transform:scale(1,1) rotate(-1.2deg)}50%{transform:scale(.97,1.05) rotate(1.4deg)}}
+@keyframes flameMain{0%,100%{transform:scale(1,1) skewX(0)}35%{transform:scale(.985,1.04) skewX(-1.2deg)}70%{transform:scale(1.015,.975) skewX(1deg)}}
+@keyframes coreFlick{0%,100%{transform:scale(1,1);opacity:.95}50%{transform:scale(.94,1.08);opacity:1}}
+@keyframes bloom{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:.95;transform:scale(1.1)}}
+@keyframes spark{0%{transform:translate(0,0) scale(1);opacity:0}12%{opacity:1}100%{transform:translate(var(--x,0),-48px) scale(.3);opacity:0}}
+.counter.lit .total{background:linear-gradient(180deg,#fff6e0,#f0c987);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tabbar{touch-action:none;user-select:none;-webkit-user-select:none}
+.tab-ind{transition:transform .6s cubic-bezier(.3,1.35,.5,1),scale .35s cubic-bezier(.3,1.5,.5,1),background .3s}
+.tab-ind.drag{transition:scale .3s cubic-bezier(.3,1.5,.5,1),background .3s;scale:1.12 1.16;background:linear-gradient(180deg,rgba(255,255,255,.36),rgba(255,255,255,.14))}
 .hide{display:none}
 </style>
 </head>
@@ -159,27 +166,29 @@ button.ghost{background:var(--field);color:var(--fg)}
 
   <div id="v-today">
     <div class="day" id="dayName"></div>
-    <div class="counter"><div class="flame off" id="flame"><svg viewBox="0 0 140 130" aria-hidden="true">
+    <div class="counter"><div class="flame off" id="flame"><svg viewBox="0 0 140 140" aria-hidden="true">
 <defs>
-<linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff3b1a"/><stop offset=".55" stop-color="#ff7a14"/><stop offset="1" stop-color="#ffa51c"/></linearGradient>
-<linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8a16"/><stop offset="1" stop-color="#ffc83a"/></linearGradient>
-<linearGradient id="g3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd84a"/><stop offset="1" stop-color="#fff1a8"/></linearGradient>
-<filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1"/></filter>
+<radialGradient id="ph" cx=".5" cy=".62" r=".6"><stop offset="0" stop-color="#ffb347" stop-opacity="0"/><stop offset=".6" stop-color="#ff9a2a" stop-opacity=".16"/><stop offset="1" stop-color="#ffc46b" stop-opacity=".55"/></radialGradient>
+<linearGradient id="pa" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd9a0" stop-opacity=".24"/><stop offset="1" stop-color="#ff8a20" stop-opacity=".72"/></linearGradient>
+<linearGradient id="pm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff4a1c"/><stop offset=".5" stop-color="#ff8c1e"/><stop offset="1" stop-color="#ffd24d"/></linearGradient>
+<linearGradient id="pc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6d6"/><stop offset="1" stop-color="#ffd978"/></linearGradient>
+<radialGradient id="pb" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff3c4" stop-opacity=".9"/><stop offset="1" stop-color="#ffb040" stop-opacity="0"/></radialGradient>
+<linearGradient id="po" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff9a3c" stop-opacity="0"/><stop offset=".5" stop-color="#ffc872" stop-opacity=".85"/><stop offset="1" stop-color="#ff9a3c" stop-opacity="0"/></linearGradient>
 <filter id="turb" x="-25%" y="-25%" width="150%" height="150%">
-<feTurbulence type="fractalNoise" baseFrequency="0.018 0.05" numOctaves="2" seed="3" result="n"><animate attributeName="baseFrequency" dur="4s" values="0.018 0.05;0.022 0.07;0.018 0.05" repeatCount="indefinite"/></feTurbulence>
-<feDisplacementMap in="SourceGraphic" in2="n" scale="9" xChannelSelector="R" yChannelSelector="G" result="d"/>
-<feGaussianBlur in="d" stdDeviation="1"/>
+<feTurbulence type="fractalNoise" baseFrequency="0.02 0.05" numOctaves="2" seed="3" result="n"><animate attributeName="baseFrequency" dur="5s" values="0.02 0.05;0.024 0.065;0.02 0.05" repeatCount="indefinite"/></feTurbulence>
+<feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+<feGaussianBlur in="d" stdDeviation=".6"/>
 </filter>
 </defs>
-<g class="fl-all">
-<g class="fl-l"><path d="M26 54C30 68 38 76 42 88L36 112C22 104 14 88 18 74C20 66 24 60 26 54Z" fill="url(#g1)" opacity=".85"/></g>
-<g class="fl-r"><path d="M114 52C110 66 102 76 98 88L104 112C118 104 126 88 122 74C120 66 116 58 114 52Z" fill="url(#g1)" opacity=".85"/></g>
-<g class="fl-a"><path d="M70 4C74 24 96 34 100 58C104 40 112 34 108 28C124 44 130 68 126 90C122 112 100 126 70 126C40 126 18 112 14 90C10 68 20 46 34 32C34 42 38 50 44 56C46 34 58 18 70 4Z" fill="url(#g1)"/></g>
-<g class="fl-b"><path d="M70 24C75 42 94 54 96 76C98 100 86 118 70 120C54 118 42 100 44 78C45 62 56 54 60 42C62 50 66 54 71 53C68 44 67 34 70 24Z" fill="url(#g2)"/></g>
-<g class="fl-c"><path d="M70 52C74 66 86 74 87 90C88 106 80 117 70 118C60 117 52 106 53 91C54 80 62 74 65 66C67 72 69 74 72 73C70 66 69 58 70 52Z" fill="url(#g3)"/></g>
-<g class="fl-d"><path d="M70 88C76 94 79 102 76 110C74 115 66 115 64 110C61 102 64 94 70 88Z" fill="#fffdf0" opacity=".95"/></g>
+<circle class="fl-halo" cx="70" cy="76" r="56" fill="url(#ph)" stroke="#ffd9a0" stroke-opacity=".35" stroke-width="1"/>
+<g transform="rotate(-28 70 76)"><ellipse class="fl-orbit" cx="70" cy="76" rx="64" ry="21" fill="none" stroke="url(#po)" stroke-width="1.6"/></g>
+<g transform="translate(70 128) rotate(-52) scale(.62) translate(-70 -128)"><path class="fl-p fl-p1" d="M70 14C84 40 96 62 92 92C89 114 78 128 70 128C62 128 51 114 48 92C44 62 56 40 70 14Z" fill="url(#pa)" stroke="#ffe9c4" stroke-opacity=".7" stroke-width=".9"/></g><g transform="translate(70 128) rotate(52) scale(.62) translate(-70 -128)"><path class="fl-p fl-p2" d="M70 14C84 40 96 62 92 92C89 114 78 128 70 128C62 128 51 114 48 92C44 62 56 40 70 14Z" fill="url(#pa)" stroke="#ffe9c4" stroke-opacity=".7" stroke-width=".9"/></g><g transform="translate(70 128) rotate(-27) scale(.82) translate(-70 -128)"><path class="fl-p fl-p3" d="M70 14C84 40 96 62 92 92C89 114 78 128 70 128C62 128 51 114 48 92C44 62 56 40 70 14Z" fill="url(#pa)" stroke="#ffe9c4" stroke-opacity=".7" stroke-width=".9"/></g><g transform="translate(70 128) rotate(27) scale(.82) translate(-70 -128)"><path class="fl-p fl-p4" d="M70 14C84 40 96 62 92 92C89 114 78 128 70 128C62 128 51 114 48 92C44 62 56 40 70 14Z" fill="url(#pa)" stroke="#ffe9c4" stroke-opacity=".7" stroke-width=".9"/></g><g transform="translate(70 128) rotate(0) scale(1) translate(-70 -128)"><path class="fl-p fl-p5" d="M70 14C84 40 96 62 92 92C89 114 78 128 70 128C62 128 51 114 48 92C44 62 56 40 70 14Z" fill="url(#pa)" stroke="#ffe9c4" stroke-opacity=".7" stroke-width=".9"/></g>
+<g transform="translate(70 128) scale(1.2) translate(-70 -128)"><g class="fl-mw">
+<path class="fl-m" d="M70 38C74 54 90 66 91 94C92 114 82 125 70 125C58 125 48 114 49 94C50 76 60 70 63 56C65 63 68 66 72 65C70 56 69 46 70 38Z" fill="url(#pm)"/>
+<path class="fl-c" d="M70 84C77 92 80 102 77 112C75 119 65 119 63 112C60 102 63 94 70 84Z" fill="url(#pc)"/>
 </g>
-<circle class="fl-s1" cx="38" cy="40" r="2" fill="#ffb347"/><circle class="fl-s2" cx="102" cy="34" r="1.6" fill="#ffd27a"/><circle class="fl-s3" cx="72" cy="20" r="1.8" fill="#ff9a3c"/>
+</g><ellipse class="fl-b" cx="70" cy="108" rx="16" ry="20" fill="url(#pb)"/>
+<circle class="fl-sp" cx="46" cy="70" r="1.6" fill="#ffc46b" style="--d:3.2s;--w:0s;--x:-6px"/><circle class="fl-sp" cx="94" cy="64" r="1.4" fill="#ffd98a" style="--d:2.8s;--w:0.6s;--x:7px"/><circle class="fl-sp" cx="70" cy="40" r="1.8" fill="#ffb347" style="--d:3.4s;--w:1.1s;--x:3px"/><circle class="fl-sp" cx="34" cy="92" r="1.2" fill="#ffd98a" style="--d:3.0s;--w:1.7s;--x:-8px"/><circle class="fl-sp" cx="104" cy="88" r="1.3" fill="#ffc46b" style="--d:3.3s;--w:2.2s;--x:8px"/><circle class="fl-sp" cx="58" cy="52" r="1.1" fill="#fff0c0" style="--d:2.6s;--w:0.3s;--x:-4px"/><circle class="fl-sp" cx="82" cy="48" r="1.2" fill="#ffb347" style="--d:3.1s;--w:1.4s;--x:5px"/><circle class="fl-sp" cx="70" cy="60" r="1.0" fill="#fff0c0" style="--d:2.9s;--w:2.6s;--x:-3px"/>
 </svg></div><div class="total" id="total">0</div></div>
     <p class="totalSub" id="totalSub">баллов за день</p>
 
@@ -464,6 +473,7 @@ function renderToday() {
   const fl = $('flame');
   fl.classList.toggle('on', r.total >= FLAME_AT);
   fl.classList.toggle('off', r.total < FLAME_AT);
+  fl.parentElement.classList.toggle('lit', r.total >= FLAME_AT);
   $('totalSub').textContent = 'баллов за день' + (r.pending ? ', без оценки: ' + r.pending : '') +
     ' · ' + (r.total >= FLAME_AT ? 'огонь горит' : 'до огня ' + Math.ceil(FLAME_AT - r.total));
 }
@@ -642,7 +652,41 @@ function show(view) {
   if (view === 'calendar') renderCalendar();
   if (view === 'tasks') loadTasks();
 }
-document.querySelectorAll('#tabbar .tab').forEach(b => b.onclick = () => show(b.dataset.view));
+document.querySelectorAll('#tabbar .tab').forEach(b => b.onclick = e => { if (e.detail === 0) show(b.dataset.view); });
+(function () {
+  const bar = $('tabbar'), ind = $('tabInd'), tabs = [...bar.querySelectorAll('.tab')];
+  let drag = null;
+  const geo = () => { const r = bar.getBoundingClientRect(); return { left: r.left + 6, w: (r.width - 12) / 4 }; };
+  const idxAt = (x, g) => Math.max(0, Math.min(3, Math.floor((x - g.left) / g.w)));
+  const mark = i => tabs.forEach((t, k) => t.classList.toggle('cur', k === i));
+  const follow = x => {
+    const g = drag.g;
+    ind.style.transform = 'translateX(' + Math.max(0, Math.min(3 * g.w, x - g.left - g.w / 2)) + 'px)';
+  };
+  bar.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const g = geo();
+    drag = { g, i: idxAt(e.clientX, g), moved: false, x0: e.clientX };
+    bar.setPointerCapture(e.pointerId);
+    ind.classList.add('drag');
+    follow(e.clientX); mark(drag.i);
+  });
+  bar.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (Math.abs(e.clientX - drag.x0) > 4) drag.moved = true;
+    follow(e.clientX);
+    const i = idxAt(e.clientX, drag.g);
+    if (i !== drag.i) { drag.i = i; mark(i); if (navigator.vibrate) navigator.vibrate(6); }
+  });
+  const end = () => {
+    if (!drag) return;
+    const { i, moved } = drag; drag = null;
+    ind.classList.remove('drag'); ind.style.transform = '';
+    if (VIEWS[i] !== curView || !moved) show(VIEWS[i]); else mark(i);
+  };
+  bar.addEventListener('pointerup', end);
+  bar.addEventListener('pointercancel', end);
+})();
 
 // Добавить запись (в выбранный день)
 $('btnAdd').onclick = async () => {
