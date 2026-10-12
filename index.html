@@ -152,6 +152,12 @@ button.ghost{background:var(--field);color:var(--fg)}
 .flame.gl.ignite{animation:none}
 .counter{margin-top:34px;margin-bottom:30px}
 .counter .total{font-size:84px}
+.counter{flex-direction:column;gap:0;margin-top:18px;margin-bottom:14px}
+.flame{width:100%;height:270px}
+.flame canvas{width:340px;height:340px}
+.counter .total{font-size:76px;position:relative;z-index:2;margin-top:-14px}
+.day{position:relative;z-index:2}
+.flame:not(.gl) svg.fb{width:128px;height:120px;display:block;margin:70px auto 0}
 .hide{display:none}
 </style>
 </head>
@@ -408,9 +414,29 @@ let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let calSel = startOfDay(new Date());
 let firstLoad = true, todayTotal = 0;
 const FLAME_AT = 30;
+const LEVEL_XP = [0, 200, 550, 1100, 1850, 2800, 3950, 5300, 6850, 8600, 10550, 12700, 15050, 17600, 20000];
+// col r,g,b | rough | transp | glow | irid | gold | ring1 ring2 ring3 | ringR | particles | lift | crystals
+const GEM_ROWS = [
+  [.05,.05,.06, 1.00,0.00,.20, 0.00,0.0, 0,0,0, 1.00,0.00,0, 3.0],
+  [.30,.17,.05, .88,.05,.30, 0.00,0.0, 0,0,0, 1.00,0.00,0, 3.4],
+  [.82,.46,.10, .62,.30,.42, 0.00,0.0, 0,0,0, 1.00,0.00,0, 4.0],
+  [.96,.52,.06, .42,.52,.52, 0.00,0.0, 0,0,0, 1.00,0.00,0, 4.6],
+  [.56,.20,.84, .26,.72,.58, 0.00,0.0, 0,0,0, 1.00,0.00,0, 5.0],
+  [.33,.22,.92, .14,.82,.64, 0.00,0.0, 1,0,0, 1.00,0.00,0, 5.4],
+  [.10,.28,.98, .10,.86,.74, 0.00,0.0, 1,0,0, 1.00,0.15,0, 6.0],
+  [.05,.36,1.0, .08,.90,.88, 0.00,0.0, 1,0,0, 1.00,0.25,0, 6.4],
+  [.80,.93,1.0, .04,1.0,.85, 0.40,0.0, 1,0,0, 1.00,0.25,0, 6.8],
+  [.10,.90,.85, .04,1.0,.90, 0.45,0.1, 1,0,0, 1.14,0.35,0, 7.2],
+  [.05,.76,.38, .03,1.0,.95, 0.50,0.5, 1,0,0, 1.14,0.60,0, 7.5],
+  [.10,.88,.50, .03,1.0,1.05,0.55,0.5, 1,1,0, 1.14,0.70,0, 7.8],
+  [.25,.86,.86, .02,1.0,1.10,0.65,0.6, 1,1,0, 1.14,0.85,1, 8.0],
+  [1.0,.92,.72, .02,1.0,1.25,0.95,0.8, 1,1,0, 1.20,0.95,1, 8.0],
+  [1.0,1.0,1.0, .02,1.0,1.45,1.00,1.0, 1,1,1, 1.25,1.00,1, 8.0]
+];
 const Gem = (function () {
   const cv = $('gem'), box = $('flame');
-  let gl = null, U = {}, ok = false, on = 0, onT = 0, lvl = 0.2, flashT0 = -1e9, last = 0, dirty = true;
+  let gl = null, U = {}, ok = false, onV = 0, onT = 0, flashT0 = -1e9, last = 0, ema = 33, dirty = true, px = window.__px || 400;
+  let cur = GEM_ROWS[0].slice(), tgt = GEM_ROWS[0].slice(), sIdx = 0, sTgt = 0;
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const VS = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
   const FS = `#ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -418,107 +444,203 @@ precision highp float;
 #else
 precision mediump float;
 #endif
-uniform vec2 uRes; uniform float uTime, uOn, uLvl, uFlash;
+uniform vec2 uRes; uniform vec3 uCol, uRing; uniform vec4 uA, uB, uC, uG0, uG1;
+#define uRough uA.x
+#define uTransp uA.y
+#define uGlow uA.z
+#define uIrid uA.w
+#define uGold uB.x
+#define uLift uB.y
+#define uPart uB.z
+#define uRingR uB.w
+#define uTime uC.x
+#define uFlash uC.y
+#define uScale uC.z
+#define uSpin uC.w
+float gRing;
 
 float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
 float noise(vec2 p){
   vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(hash(i), hash(i+vec2(1.0,0.0)), f.x), mix(hash(i+vec2(0.0,1.0)), hash(i+vec2(1.0,1.0)), f.x), f.y);
 }
-float fbm(vec2 p){
-  float v = 0.0, a = 0.5;
-  for (int i = 0; i < 4; i++) { v += a*noise(p); p = p*2.03 + vec2(1.7, 9.2); a *= 0.5; }
-  return v;
+vec3 rotY(vec3 p, float a){ float c = cos(a), s = sin(a); return vec3(c*p.x + s*p.z, p.y, -s*p.x + c*p.z); }
+
+float cry(vec3 p, vec3 b, vec2 tl, float h, float r, float g){
+  if (g < 0.002) return 1e3;
+  vec3 q = p - b; q.xz -= tl*q.y;
+  float hh = h*g, rr = r*(0.45 + 0.55*g);
+  float hx = max(abs(q.x)*0.866025 + abs(q.z)*0.5, abs(q.z));
+  float y0 = hh*0.62;
+  float body = hx - rr;
+  float pyr = (hx/rr + (q.y - y0)/(hh - y0) - 1.0) / (1.0/rr + 1.0/(hh - y0));
+  return max(max(body, pyr), -q.y - 0.03);
 }
-vec4 over(vec4 a, vec4 b){ return a + b*(1.0 - a.a); }
+float crys(vec3 p){
+  p.y -= uLift*0.14;
+  float d = cry(p, vec3( 0.00,0.0, 0.00), vec2( 0.00, 0.00), 0.95, 0.150, uG0.x);
+  d = min(d, cry(p, vec3(-0.23,0.0, 0.06), vec2(-0.22, 0.05), 0.72, 0.115, uG0.y));
+  d = min(d, cry(p, vec3( 0.24,0.0,-0.04), vec2( 0.22,-0.03), 0.78, 0.120, uG0.z));
+  d = min(d, cry(p, vec3( 0.05,0.0, 0.24), vec2( 0.05, 0.24), 0.60, 0.100, uG0.w));
+  d = min(d, cry(p, vec3(-0.08,0.0,-0.25), vec2(-0.04,-0.25), 0.66, 0.105, uG1.x));
+  d = min(d, cry(p, vec3(-0.42,0.0,-0.10), vec2(-0.38,-0.08), 0.46, 0.085, uG1.y));
+  d = min(d, cry(p, vec3( 0.43,0.0, 0.12), vec2( 0.36, 0.10), 0.50, 0.090, uG1.z));
+  d = min(d, cry(p, vec3( 0.12,0.0,-0.42), vec2( 0.08,-0.36), 0.40, 0.080, uG1.w));
+  return d;
+}
+float rock(vec3 p){
+  vec3 q = p - vec3(0.0, -0.14, 0.0);
+  float d = (length(q*vec3(1.0, 3.4, 1.0)) - 0.6) * 0.5;
+  d += 0.05*(noise(q.xz*5.0 + 3.0) - 0.5) + 0.02*(noise(q.xz*17.0) - 0.5) + 0.006*(noise(q.xz*41.0) - 0.5);
+  return d;
+}
+vec2 ring(vec3 p, float tilt, float prec, float R, float a, float th){
+  if (a < 0.01) return vec2(1e3);
+  vec3 q = p; q.y -= 0.3;
+  float c = cos(prec), s = sin(prec);
+  q.xz = vec2(c*q.x - s*q.z, s*q.x + c*q.z);
+  float ct = cos(tilt), st = sin(tilt);
+  q.yz = vec2(ct*q.y - st*q.z, st*q.y + ct*q.z);
+  float dt = length(vec2(length(q.xz) - R, q.y)) - (0.005 + 0.004*a);
+  float db = length(q - vec3(R*cos(th), 0.0, R*sin(th))) - 0.022*a;
+  return vec2(dt, db);
+}
+vec2 map(vec3 p){
+  vec3 ps = p / uScale;
+  vec3 po = rotY(ps, uSpin);
+  float d = rock(po), id = 1.0;
+  float c = crys(po); if (c < d) { d = c; id = 2.0; }
+  if (uLift > 0.01) { float dd = max(length(ps.xz) - 0.5*uLift, abs(ps.y - 0.02) - 0.006); if (dd < d) { d = dd; id = 5.0; } }
+  vec2 r0 = ring(ps,  0.31, uTime*0.21,       0.50*uRingR, uRing.x, uTime*0.9);
+  vec2 r1 = ring(ps, -0.38, 1.0 - uTime*0.17, 0.57*uRingR, uRing.y, 2.0 - uTime*0.7);
+  vec2 r2 = ring(ps,  0.44, 2.0 + uTime*0.13, 0.64*uRingR, uRing.z, 4.0 + uTime*0.55);
+  float rt = min(min(r0.x, r1.x), r2.x), rb = min(min(r0.y, r1.y), r2.y);
+  gRing = min(gRing, min(rt, rb));
+  if (rt < d) { d = rt; id = 3.0; }
+  if (rb < d) { d = rb; id = 4.0; }
+  return vec2(d*uScale, id);
+}
+float dC(vec3 pw){ return crys(rotY(pw/uScale, uSpin))*uScale; }
+
+vec3 env(vec3 r, float rough){
+  float e1 = pow(max(dot(r, normalize(vec3(-0.5, 0.8, 0.45))), 0.0), mix(60.0, 5.0, rough));
+  float e2 = pow(max(dot(r, normalize(vec3(0.8, 0.25, -0.5))), 0.0), mix(40.0, 4.0, rough));
+  float e3 = pow(max(dot(r, normalize(vec3(0.1, -0.6, 0.8))), 0.0), mix(30.0, 4.0, rough));
+  float band = smoothstep(0.03, 0.0, abs(r.y - 0.15));
+  return vec3(0.015, 0.02, 0.035) + vec3(1.3,1.2,1.1)*e1 + vec3(0.4,0.65,1.2)*e2 + vec3(0.9,0.7,0.5)*e3*0.6 + vec3(0.8,0.9,1.0)*band*0.12;
+}
+vec3 shadeCrystal(vec3 p, vec3 n, vec3 rd){
+  vec3 L = normalize(vec3(-0.4, 0.8, 0.5));
+  float nv = max(dot(n, -rd), 0.0);
+  float F = 0.05 + 0.95*pow(1.0 - nv, 5.0);
+  vec3 refl = env(reflect(rd, n), uRough);
+  float disp = 0.012 + 0.07*uIrid;
+  vec3 rr = refract(rd, n, 1.0/1.5);
+  vec3 rg = refract(rd, n, 1.0/(1.5 + disp));
+  vec3 rb = refract(rd, n, 1.0/(1.5 + 2.0*disp));
+  float tt = 0.0; vec3 q = p + rr*0.02;
+  for (int i = 0; i < 9; i++){
+    float d = -dC(q);
+    if (d < 0.004) break;
+    float st = max(d, 0.03);
+    q += rr*st; tt += st;
+  }
+  vec3 absorb = (1.0 - uCol)*4.0 + 0.12;
+  vec3 T = exp(-absorb*tt*(1.9 - uTransp));
+  vec3 trans = vec3(env(rr, 0.15).r, env(rg, 0.15).g, env(rb, 0.15).b);
+  float cd = length(p/uScale - vec3(0.0, 0.3, 0.0));
+  vec3 inner = uCol*uGlow*(0.25 + 1.6*exp(-2.4*cd))*(1.0 + uFlash*1.6);
+  vec3 body = trans*T*0.9 + inner*(0.35 + 0.65*(1.0 - T));
+  vec3 glass = body*(1.0 - F) + refl*F;
+  float diff = max(dot(n, L), 0.0);
+  vec3 matte = uCol*(0.10 + 0.55*diff) + refl*F*0.15 + inner*0.25;
+  vec3 col = mix(glass, matte, smoothstep(0.3, 1.0, uRough));
+  col += vec3(1.0, 0.72, 0.25)*exp(-length(p/uScale - vec3(0.02, 0.12, 0.03))*5.0)*(1.0 - uTransp)*(0.5 + uGlow)*1.6;
+  col += vec3(0.18, 0.24, 0.35)*pow(1.0 - nv, 2.5)*uRough*0.8;
+  col += vec3(1.0, 0.78, 0.35)*pow(1.0 - nv, 3.0)*uGold*0.6;
+  vec3 irid = 0.5 + 0.5*cos(6.28318*(nv*1.4 + vec3(0.0, 0.33, 0.67) + p.y*0.45 + uTime*0.04));
+  col += irid*uIrid*(0.08 + 0.40*pow(1.0 - nv, 2.0));
+  col *= 0.8 + 0.4*smoothstep(0.0, 0.9, p.y/uScale);
+  return col;
+}
+vec3 shadeRock(vec3 p, vec3 n){
+  vec3 L = normalize(vec3(-0.4, 0.8, 0.5));
+  float diff = max(dot(n, L), 0.0);
+  float sp = noise(p.xz*14.0)*0.6 + noise(p.xz*40.0)*0.4;
+  vec3 col = vec3(0.07, 0.072, 0.082)*(0.35 + 1.1*sp)*(0.35 + 0.8*diff);
+  float cd = length(p.xz)/uScale;
+  col += uCol*uGlow*0.16*exp(-cd*2.2)*(0.3 + 0.7*uTransp);
+  float cau = pow(abs(sin(p.x*21.0 + uTime*0.6)*sin(p.z*19.0 - uTime*0.5) + sin((p.x + p.z)*14.0 + uTime*0.4)*0.5), 3.0);
+  col += uCol*cau*0.35*uTransp*uGlow*exp(-cd*2.0);
+  return col;
+}
+vec3 goldMat(vec3 n, vec3 rd){
+  vec3 L = normalize(vec3(-0.4, 0.8, 0.5));
+  return vec3(1.0, 0.78, 0.32)*(0.4 + 0.8*pow(max(dot(n, L), 0.0), 0.6)) + 0.6*env(reflect(rd, n), 0.1)*vec3(1.0, 0.85, 0.5);
+}
 
 void main(){
-  vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / uRes.y;
-  float t = uTime, lv = uLvl, on = uOn;
-  vec2 c = vec2(0.0, 0.075);
-  vec2 R = vec2(0.225, 0.285) * (1.0 + 0.008*sin(t*0.9));
-
-  // ---- halo ----
-  vec2 hd = (uv - c) / vec2(0.5, 0.56);
-  float hI = exp(-dot(hd,hd)*2.4) * smoothstep(0.5, 0.26, length(uv));
-  hI *= (0.30 + 0.70*on) * (0.88 + 0.12*sin(t*1.1)) * (1.0 + uFlash*0.9);
-  vec3 hc = mix(vec3(0.04,0.55,0.62), vec3(0.16,0.22,0.85), smoothstep(-0.25, 0.35, uv.x + 0.12*sin(t*0.3)));
-  hc = mix(hc, vec3(0.65,0.25,0.8), 0.25*smoothstep(0.1, 0.4, uv.y)*lv);
-  vec3 hrgb = hc*hI;
-  vec4 halo = vec4(hrgb, max(hrgb.r, max(hrgb.g, hrgb.b)));
-
-  // ---- pedestal ----
-  vec2 pc = vec2(0.0, -0.2); vec2 pr = vec2(0.215, 0.04); float ph = 0.055;
-  vec2 pp = uv - pc;
-  float eTop = length(pp/pr);
-  float top = 1.0 - smoothstep(0.96, 1.0, eTop);
-  vec2 pb = uv - (pc - vec2(0.0, ph));
-  float bot = 1.0 - smoothstep(0.96, 1.0, length(pb/pr));
-  float box = step(abs(pp.x), pr.x) * step(-ph, pp.y) * step(pp.y, 0.0);
-  float ped = max(max(top, bot), box);
-  vec3 pcol = vec3(0.02, 0.022, 0.03);
-  pcol += vec3(0.03,0.04,0.05) * smoothstep(0.0, -1.0, pp.x/pr.x) * (1.0 - top);
-  vec2 tgv = pp/vec2(0.13, 0.026);
-  pcol += mix(vec3(0.05,0.45,0.5), vec3(0.4,0.2,0.7), 0.4) * exp(-dot(tgv,tgv)) * top * (0.25 + 0.75*on) * 0.9;
-  float rim = (smoothstep(0.90, 0.985, eTop) - smoothstep(0.985, 1.0, eTop)) * step(pp.y, 0.0);
-  pcol += vec3(0.5,0.8,0.9) * rim * 0.25;
-  vec4 pedv = vec4(pcol*ped, ped);
-
-  // ---- gem ----
-  vec2 p = uv - c;
-  float a = atan(p.y, p.x);
-  float deform = 1.0 + 0.07*sin(2.0*a+0.6) + 0.05*sin(3.0*a+2.1) + 0.035*sin(5.0*a+0.3);
-  vec2 pn = p / R;
-  float q = length(pn) / deform;
-  float m = 1.0 - smoothstep(0.985, 1.0, q);
-  vec4 gemv = vec4(0.0);
-  if (m > 0.0) {
-    float zz = sqrt(max(0.0, 1.0 - q*q));
-    vec3 n = normalize(vec3(pn/deform*0.85, zz*0.95 + 0.05));
-    vec2 g = vec2(noise(pn*3.0 + t*0.05 + vec2(0.1,0.0)) - noise(pn*3.0 + t*0.05),
-                  noise(pn*3.0 + t*0.05 + vec2(0.0,0.1)) - noise(pn*3.0 + t*0.05)) * 2.2;
-    n = normalize(n + vec3(g*0.35, 0.0));
-    vec3 V = vec3(0.0, 0.0, 1.0);
-    float la = t*0.25;
-    vec3 L1 = normalize(vec3(-0.5 + 0.15*sin(la), 0.65 + 0.1*cos(la*0.8), 0.6));
-    vec3 L2 = normalize(vec3(0.6, -0.3, 0.5));
-    float d1 = max(dot(n, L1), 0.0);
-    float sp1 = pow(max(dot(reflect(-L1, n), V), 0.0), 70.0);
-    float sp2 = pow(max(dot(reflect(-L2, n), V), 0.0), 40.0);
-    float fr = pow(1.0 - n.z, 2.4);
-
-    float rot = t*0.05;
-    vec2 s = pn*1.6 + n.xy*1.4;
-    s = mat2(cos(rot), -sin(rot), sin(rot), cos(rot)) * s;
-    vec2 w = vec2(fbm(s*1.4 + vec2(0.0, t*0.07)), fbm(s*1.4 + vec2(5.2, 1.3 - t*0.06)));
-    float f = fbm(s*2.0 + 2.2*w + t*0.04);
-    float pat = smoothstep(0.34, 0.78, fbm(s*2.6 + w*3.0 - t*0.03));
-    float kk = fract(f*1.3 + n.x*0.25 + t*0.02) * 4.0;
-    vec3 c0 = vec3(0.10, 0.85, 0.85), c1 = vec3(0.25, 0.45, 1.0), c2 = vec3(0.95, 0.30, 0.75), c3 = vec3(1.0, 0.62, 0.28);
-    float kf = smoothstep(0.0, 1.0, fract(kk));
-    vec3 pal = kk < 1.0 ? mix(c0, c1, kf) : kk < 2.0 ? mix(c1, c2, kf) : kk < 3.0 ? mix(c2, c3, kf) : mix(c3, c0, kf);
-    pal *= 1.1;
-
-    vec3 body = mix(vec3(0.62, 0.88, 0.97), vec3(0.95, 0.98, 1.0), smoothstep(0.0, 1.0, zz)*0.6 + 0.2);
-    body *= 0.62 + 0.45*(0.35 + 0.65*d1);
-    body += vec3(0.05, 0.28, 0.40) * (1.0 - zz) * 0.5;
-    body += vec3(0.10, 0.50, 0.60) * smoothstep(-0.2, -1.0, pn.y) * 0.35;
-    vec3 col = mix(body, pal, pat * (0.55 + 0.4*lv));
-    col *= 0.75 + 0.35*fbm(s*5.0 + w);
-    col += vec3(0.55, 0.85, 1.0) * fr * 0.55;
-    col += vec3(1.0)*sp1*0.95 + vec3(1.0, 0.85, 0.7)*sp2*0.5;
-
-    vec2 sg = floor(pn*14.0); float hh = hash(sg); vec2 sf = fract(pn*14.0) - 0.5;
-    float tw = smoothstep(0.97, 1.0, sin(t*(0.6 + hh*1.5) + hh*40.0)*0.5 + 0.5);
-    col += vec3(1.0) * step(0.82, hh) * tw * smoothstep(0.18, 0.0, length(sf)) * (0.5 + 0.8*lv);
-
-    float lum = dot(col, vec3(0.3, 0.59, 0.11));
-    col = mix(vec3(lum)*0.55, col, 0.15 + 0.85*on);
-    col *= 1.0 + uFlash*0.6;
-    col = mix(col, col*0.35, smoothstep(0.9, 1.0, q)*0.5);
-    gemv = vec4(col*m, m);
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/uRes.y;
+  float t = uTime;
+  vec3 ro = vec3(0.0, 1.0, 4.0), ta = vec3(0.0, 0.42, 0.0);
+  vec3 f = normalize(ta - ro), rt = normalize(cross(f, vec3(0.0, 1.0, 0.0))), up = cross(rt, f);
+  vec3 rd = normalize(f + (uv.x*rt + uv.y*up)*0.66);
+  vec3 bc = vec3(0.0, 0.4, 0.0); float br = 1.55;
+  vec3 oc = ro - bc; float b = dot(oc, rd), cc = dot(oc, oc) - br*br, disc = b*b - cc;
+  gRing = 1e3;
+  bool hit = false; float tt = 0.0, id = 0.0;
+  if (disc > 0.0){
+    float sq = sqrt(disc); tt = max(-b - sq, 0.0); float tmax = -b + sq;
+    for (int i = 0; i < 60; i++){
+      vec2 h = map(ro + rd*tt);
+      if (h.x < 0.0025){ hit = true; id = h.y; break; }
+      tt += h.x*0.85;
+      if (tt > tmax) break;
+    }
   }
-  gl_FragColor = over(gemv, over(pedv, halo));
+  vec3 addl = vec3(0.0);
+  float em = smoothstep(0.5, 0.3, length(uv));
+  addl += vec3(1.0, 0.75, 0.3)*exp(-gRing*28.0)*0.5*em;
+  vec3 col = vec3(0.0);
+  if (hit){
+    vec3 pos = ro + rd*tt;
+    vec2 e = vec2(1.0, -1.0)*0.0015;
+    vec3 n = normalize(e.xyy*map(pos + e.xyy).x + e.yyx*map(pos + e.yyx).x + e.yxy*map(pos + e.yxy).x + e.xxx*map(pos + e.xxx).x);
+    if (id < 1.5) col = shadeRock(pos, n);
+    else if (id < 2.5) {
+      n = normalize(n + 0.05*vec3(sin(pos.y*90.0/uScale), 0.0, cos(pos.y*83.0/uScale)));
+      col = shadeCrystal(pos, n, rd);
+      vec2 e2 = vec2(1.0, -1.0)*0.012;
+      vec3 n2 = normalize(e2.xyy*map(pos + e2.xyy).x + e2.yyx*map(pos + e2.yyx).x + e2.yxy*map(pos + e2.yxy).x + e2.xxx*map(pos + e2.xxx).x);
+      float edge = clamp(1.0 - dot(n, n2), 0.0, 1.0)*8.0;
+      col += mix(vec3(0.8, 0.9, 1.0), vec3(1.0, 0.8, 0.4), uGold)*min(edge, 1.0)*(0.1 + 0.4*uTransp);
+    }
+    else if (id < 3.5) col = goldMat(n, rd);
+    else if (id < 4.5) col = vec3(1.0, 0.85, 0.45)*2.0;
+    else col = uCol*0.65*(1.0 + uFlash);
+    col *= 1.0 + uFlash*0.5;
+  }
+  vec2 hd = uv - vec2(0.0, 0.05);
+  addl += mix(uCol, vec3(0.5), 0.3)*exp(-dot(hd, hd)*6.5)*0.30*uGlow*em;
+  float ang = atan(hd.y, hd.x);
+  addl += vec3(1.0, 0.92, 0.8)*pow(abs(sin(ang*9.0 + t*0.25)), 10.0)*exp(-length(hd)*4.0)*uIrid*uGlow*0.16*em;
+  if (uPart > 0.01){
+    for (int i = 0; i < 36; i++){
+      float fi = float(i);
+      if (fi >= uPart*36.0) break;
+      float h1 = hash(vec2(fi, 3.7)), h2 = hash(vec2(fi, 9.1)), h3 = hash(vec2(fi, 1.3));
+      float life = fract(t*(0.05 + 0.05*h3) + h1);
+      vec2 pp = vec2((h2 - 0.5)*0.8 + 0.04*sin(t*0.7 + fi*3.0), -0.18 + life*0.8);
+      float r2 = dot(uv - pp, uv - pp);
+      float tw = smoothstep(0.0, 0.15, life)*(1.0 - smoothstep(0.55, 1.0, life));
+      addl += vec3(1.0, 0.82, 0.45)*tw*(exp(-r2*9000.0) + 0.0003/(r2 + 0.0003)*0.2)*(0.5 + h3)*em;
+    }
+  }
+  col = (col*(2.51*col + 0.03))/(col*(2.43*col + 0.59) + 0.14);
+  float a = hit ? 1.0 : 0.0;
+  vec3 outc = col*a + min(addl, vec3(1.0))*(1.0 - a);
+  float oa = max(a, max(addl.r, max(addl.g, addl.b)));
+  gl_FragColor = vec4(outc, clamp(oa, 0.0, 1.0));
 }
 `;
   function sh(type, src) {
@@ -526,9 +648,10 @@ void main(){
     if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(x)); return null; }
     return x;
   }
+  function resize() { cv.width = cv.height = Math.round(px); if (gl) gl.viewport(0, 0, cv.width, cv.height); }
   function init() {
     try { gl = cv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false }); } catch (e) { gl = null; }
-    if (!gl) return;
+    if (!gl || gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) < 16) return;
     const v = sh(gl.VERTEX_SHADER, VS), f = sh(gl.FRAGMENT_SHADER, FS);
     if (!v || !f) return;
     const pr = gl.createProgram(); gl.attachShader(pr, v); gl.attachShader(pr, f); gl.linkProgram(pr);
@@ -537,37 +660,57 @@ void main(){
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     const a = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
-    for (const n of ['uRes', 'uTime', 'uOn', 'uLvl', 'uFlash']) U[n] = gl.getUniformLocation(pr, n);
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    cv.width = Math.round(330 * dpr); cv.height = Math.round(330 * dpr);
-    gl.viewport(0, 0, cv.width, cv.height);
-    gl.clearColor(0, 0, 0, 0);
+    for (const n of ['uRes', 'uCol', 'uRing', 'uA', 'uB', 'uC', 'uG0', 'uG1']) U[n] = gl.getUniformLocation(pr, n);
+    resize(); gl.clearColor(0, 0, 0, 0);
     ok = true; box.classList.add('gl');
     requestAnimationFrame(loop);
   }
+  const g = i => Math.min(1, Math.max(0, cur[14] - i));
   function loop(now) {
     requestAnimationFrame(loop);
     if (!cv.offsetParent) return;
     if (reduce && !dirty) return;
     if (now - last < 32) return;
+    if (!window.__noAdapt && last) {
+      ema = ema * 0.9 + (now - last) * 0.1;
+      if (ema > 55 && px > 240) { px = Math.max(240, px * 0.85); resize(); ema = 33; }
+    }
     last = now; dirty = false;
-    on += (onT - on) * 0.07;
+    const k = reduce ? 1 : 0.06;
+    for (let i = 0; i < cur.length; i++) cur[i] += (tgt[i] - cur[i]) * k;
+    sIdx += (sTgt - sIdx) * k;
+    onV += (onT - onV) * 0.07;
+    const time = reduce ? 3.0 : (now / 1000) % 1200;
     const dt = (now - flashT0) / 1000;
     const flash = dt >= 0 && dt < 2 ? Math.exp(-Math.pow((dt - 0.55) / 0.3, 2)) : 0;
+    const scale = (1 + 0.025 * sIdx) * (1 + 0.015 * Math.sin(time * 1.5708));
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform2f(U.uRes, cv.width, cv.height);
-    gl.uniform1f(U.uTime, reduce ? 3.0 : (now / 1000) % 1200);
-    gl.uniform1f(U.uOn, on); gl.uniform1f(U.uLvl, lvl); gl.uniform1f(U.uFlash, flash);
+    gl.uniform3f(U.uCol, cur[0], cur[1], cur[2]);
+    gl.uniform3f(U.uRing, cur[8], cur[9], cur[10]);
+    gl.uniform4f(U.uA, cur[3], cur[4], cur[5] * (0.82 + 0.18 * onV), cur[6]);
+    gl.uniform4f(U.uB, cur[7], cur[13], cur[12], cur[11]);
+    gl.uniform4f(U.uC, time, flash, scale, time * 0.314159);
+    gl.uniform4f(U.uG0, g(0), g(1), g(2), g(3));
+    gl.uniform4f(U.uG1, g(4), g(5), g(6), g(7));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
   init();
   return {
     get ok() { return ok; },
-    setOn(v) { onT = v ? 1 : 0; if (reduce) on = onT; dirty = true; },
-    setLevel(L) { lvl = Math.min(1, Math.max(0.12, L / 8)); dirty = true; },
-    ignite() { on = 0; flashT0 = performance.now(); dirty = true; }
+    setOn(v) { onT = v ? 1 : 0; if (reduce) onV = onT; dirty = true; },
+    setXP(xp, instant) {
+      const { L, frac } = levelInfo(xp);
+      const idx = Math.min(14, L - 1 + frac), i = Math.min(13, Math.floor(idx)), f = idx - i;
+      tgt = GEM_ROWS[i].map((v, kk) => v + (GEM_ROWS[i + 1][kk] - v) * f); sTgt = idx;
+      if (instant) { cur = tgt.slice(); sIdx = sTgt; }
+      dirty = true;
+    },
+    ignite() { onV = 0; flashT0 = performance.now(); dirty = true; },
+    pulse() { flashT0 = performance.now(); dirty = true; }
   };
 })();
+let lastXP = null, gemInit = false;
 const processing = new Set();
 async function scoreEntry(id) {
   processing.add(id);
@@ -594,15 +737,21 @@ function hue(cat) {
   let h = 0; for (const c of cat) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return h % 2 ? 'teal' : 'cobalt';
 }
-function needFor(L) { return 20 * L * L + 70; }
-function levelInfo(xp) { let L = 1, rest = xp; while (rest >= needFor(L)) { rest -= needFor(L); L++; } return { L, cur: Math.round(rest), need: needFor(L) }; }
+function levelInfo(xp) {
+  let L = 1; while (L < 15 && xp >= LEVEL_XP[L]) L++;
+  if (L >= 15) return { L: 15, cur: Math.round(xp - 20000), need: 0, frac: 1 };
+  const a = LEVEL_XP[L - 1], b = LEVEL_XP[L];
+  return { L, cur: Math.round(xp - a), need: b - a, frac: (xp - a) / (b - a) };
+}
 function renderLevel(r) {
   const xp = all.reduce((n, a) => n + (Number(a.score) || 0), 0);
   const { L, cur, need } = levelInfo(xp);
-  $('xpTxt').textContent = 'До Уровня ' + (L + 1) + ': ' + cur + '/' + need + ' XP';
-  $('xpFill').style.width = Math.round(cur / need * 100) + '%';
+  $('xpTxt').textContent = need ? 'До Уровня ' + (L + 1) + ': ' + cur + '/' + need + ' XP' : 'Максимальный уровень · ' + Math.round(xp) + ' XP';
+  $('xpFill').style.width = need ? Math.round(cur / need * 100) + '%' : '100%';
   document.querySelectorAll('#flame .cr').forEach(c => { c.style.display = L >= Number(c.dataset.l) ? '' : 'none'; });
-  Gem.setLevel(L);
+  Gem.setXP(xp, !gemInit);
+  if (gemInit && lastXP !== null && xp > lastXP) Gem.pulse();
+  gemInit = true; lastXP = xp;
   $('lvlBig').textContent = L;
   $('lvlSub').textContent = 'Уровень · всего ' + Math.round(xp) + ' XP';
   $('totalSub').textContent = 'баллов за день · уровень ' + L + (r.pending ? ' · без оценки: ' + r.pending : '');
